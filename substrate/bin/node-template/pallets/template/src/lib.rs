@@ -9,8 +9,10 @@
 /// For more guidance on Substrate FRAME, see the example pallet
 /// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
-use frame_support::{decl_module, decl_storage, decl_event, decl_error, dispatch};
+use frame_support::{decl_module, decl_storage, decl_error, dispatch, debug};
+use frame_support::weights::SimpleDispatchInfo;
 use system::ensure_signed;
+use codec::{Encode, Decode};
 
 #[cfg(test)]
 mod mock;
@@ -20,10 +22,16 @@ mod tests;
 
 /// The pallet's configuration trait.
 pub trait Trait: system::Trait {
-	// Add other types and constants required to configure this pallet.
+}
 
-	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+type GistId = [u8; 32];
+type GithubUsername = Vec<u8>;
+type GistFilename = Vec<u8>;
+
+#[derive(Encode, Decode)]
+pub struct Request<Account> {
+	pub account: Account,
+	pub gist_id: GistId,
 }
 
 // This pallet's storage items.
@@ -32,21 +40,15 @@ decl_storage! {
 	// storage items are isolated from other pallets.
 	// ---------------------------------vvvvvvvvvvvvvv
 	trait Store for Module<T: Trait> as TemplateModule {
+		/// A map of requested Gist ids by particular account.
 		Requests get(fn requests):
-			map hasher(twox_64_concat) T::AccountId => Option<[u8; 64]>,
+			map hasher(twox_64_concat) T::AccountId => Option<Request<T::AccountId>>;
 
-		// Just a dummy storage item.
-		// Here we are declaring a StorageValue, `Something` as a Option<u32>
-		// `get(fn something)` is the default getter which returns either the stored `u32` or `None` if nothing stored
-		Something get(fn something): Option<u32>;
+		/// A map of already validated usernames.
+		Usernames get(fn usernames):
+			map hasher(twox_64_concat) T::AccountId => Option<GithubUsername>;
 	}
 }
-
-// The pallet's events
-decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
-	}
-);
 
 // The pallet's errors
 decl_error! {
@@ -67,18 +69,85 @@ decl_module! {
 		// it is needed only if you are using errors in your pallet
 		type Error = Error<T>;
 
-		// Initializing events
-		// this is needed only if you are using events in your pallet
-		fn deposit_event() = default;
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		pub fn request_verification(origin, gist_id: GistId) -> dispatch::DispatchResult {
+			// Retrieve sender of the transaction.
+			let who = ensure_signed(origin)?;
+			// TODO [ToDr] Disallow if already requested?
+			// Perhaps best would be to let the request timeout at some point.
+			// So that an account can request again in the future.
+			// Also perhaps disallow if mapping exists?
+			Requests::<T>::insert(who.clone(), Request {
+				account: who,
+				gist_id,
+			});
+
+			Ok(())
+		}
+
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		pub fn respond_verification(origin, account_id: T::AccountId, username: GithubUsername)
+			-> dispatch::DispatchResult {
+			if !Requests::<T>::contains_key(&account_id) {
+				Err("No request for this account.")?
+			}
+
+			// make sure to remove the request.
+			// TODO [ToDr] Most likely we should check that we are responding to the same
+			// request (i.e. include gist_id and check it here)
+			Requests::<T>::remove(&account_id);
+
+			// Insert to usernames.
+			Usernames::<T>::insert(account_id, username);
+
+			// TODO [ToDr] Dispatch event.
+			Ok(())
+		}
 
 		fn offchain_worker(number: T::BlockNumber) {
-			use frame_support::debug;
-
 			debug::warn!("Hello World from offchain workers!");
 			debug::warn!("Current Block Number: {:?}", number);
 
 			// make an http request (request fixed login)
-
+			match Self::process_requests() {
+				Ok(count) => debug::info!("Processed {} requests.", count),
+				Err(err) => debug::error!("Unable to process: {}", err),
+			}
 		}
+	}
+}
+
+impl<T: Trait> Module<T> {
+	fn process_requests() -> Result<usize, &'static str> {
+		let mut count = 0;
+		for Request { account, gist_id } in Requests::<T>::iter_values() {
+			let (filename, username) = Self::retrieve_gist_filename(&gist_id)?;
+			debug::info!(
+				"[{:?}] Retrieved:\nFilename: {:?}\nUsername: {:?}",
+				gist_id, filename, username
+			);
+			Self::check_if_valid(&account, &filename)?;
+			Self::send_response(account, username)?;
+			count += 1;
+		}
+		Ok(count)
+	}
+
+	fn retrieve_gist_filename(gist_id: &GistId)
+		-> Result<(GistFilename, GithubUsername), &'static str>
+	{
+		unimplemented!()
+	}
+
+	fn check_if_valid(account_id: &T::AccountId, filename: &GistFilename)
+		-> Result<(), &'static str>
+	{
+		unimplemented!()
+	}
+
+	fn send_response(account_id: T::AccountId, username: GithubUsername)
+		-> Result<(), &'static str>
+	{
+		unimplemented!()
 	}
 }

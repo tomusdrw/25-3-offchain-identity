@@ -472,9 +472,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.2.0"
+version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f359dc14ff8911330a51ef78022d376f25ed00248912803b58f00cb1c27f742"
+checksum = "12ae9db68ad7fac5fe51304d20f016c911539251075a214f8e663babefa35187"
 
 [[package]]
 name = "byte-slice-cast"
@@ -3598,7 +3598,6 @@ dependencies = [
  "pallet-utility",
  "pallet-vesting",
  "parity-scale-codec",
- "rustc-hex",
  "serde",
  "sp-api",
  "sp-authority-discovery",
@@ -4063,6 +4062,7 @@ dependencies = [
 name = "pallet-collective"
 version = "2.0.0-alpha.5"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex-literal",
@@ -6291,6 +6291,7 @@ dependencies = [
  "futures 0.3.4",
  "futures-timer 3.0.2",
  "futures_codec",
+ "hex",
  "libp2p",
  "linked-hash-map",
  "linked_hash_set",
@@ -6304,7 +6305,6 @@ dependencies = [
  "prost-build",
  "quickcheck",
  "rand 0.7.3",
- "rustc-hex",
  "sc-block-builder",
  "sc-client",
  "sc-client-api",
@@ -6430,7 +6430,6 @@ dependencies = [
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
- "rustc-hex",
  "sc-block-builder",
  "sc-client",
  "sc-client-api",
@@ -6652,10 +6651,12 @@ dependencies = [
 name = "sc-transaction-pool"
 version = "2.0.0-alpha.5"
 dependencies = [
+ "assert_matches",
  "derive_more",
  "futures 0.3.4",
  "futures-diagnose",
  "futures-timer 2.0.2",
+ "hex",
  "log 0.4.8",
  "parity-scale-codec",
  "parity-util-mem",
@@ -7249,7 +7250,6 @@ dependencies = [
  "primitive-types",
  "rand 0.7.3",
  "regex",
- "rustc-hex",
  "schnorrkel",
  "serde",
  "serde_json",
@@ -7746,7 +7746,6 @@ dependencies = [
  "parity-scale-codec",
  "rand 0.7.3",
  "rpassword",
- "rustc-hex",
  "sc-rpc",
  "serde_json",
  "sp-core",
