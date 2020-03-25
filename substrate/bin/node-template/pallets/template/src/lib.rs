@@ -47,9 +47,7 @@ pub struct Request<Account> {
 
 // This pallet's storage items.
 decl_storage! {
-	// It is important to update your storage name so that your pallet's
-	// storage items are isolated from other pallets.
-	// ---------------------------------vvvvvvvvvvvvvv
+
 	trait Store for Module<T: Trait> as TemplateModule {
 		/// A map of requested Gist ids by particular account.
 		Requests get(fn requests):
@@ -59,6 +57,7 @@ decl_storage! {
 		Usernames get(fn usernames):
 			map hasher(twox_64_concat) T::AccountId => Option<GithubUsername>;
 	}
+
 }
 
 // The pallet's errors
@@ -123,8 +122,23 @@ decl_module! {
 			debug::warn!("Hello World from offchain workers!");
 			debug::warn!("Current Block Number: {:?}", number);
 
+			let res: Result<usize, &'static str> = (||{
+				let mut count = 0;
+				for Request { account, gist_id } in Requests::<T>::iter_values() {
+					let (filename, username) = Self::retrieve_gist(&gist_id)?;
+					debug::info!(
+						"[{:?}] Retrieved:\nFilename: {:?}\nUsername: {:?}",
+						gist_id, filename, username
+					);
+					Self::check_if_valid(&account, &filename)?;
+					Self::send_response(account, username)?;
+					count += 1;
+				}
+				Ok(count)
+			})();
+
 			// make an http request (request fixed login)
-			match Self::process_requests() {
+			match res {
 				Ok(count) => debug::info!("Processed {} requests.", count),
 				Err(err) => debug::error!("Unable to process: {}", err),
 			}
@@ -133,21 +147,6 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	fn process_requests() -> Result<usize, &'static str> {
-		let mut count = 0;
-		for Request { account, gist_id } in Requests::<T>::iter_values() {
-			let (filename, username) = Self::retrieve_gist(&gist_id)?;
-			debug::info!(
-				"[{:?}] Retrieved:\nFilename: {:?}\nUsername: {:?}",
-				gist_id, filename, username
-			);
-			Self::check_if_valid(&account, &filename)?;
-			Self::send_response(account, username)?;
-			count += 1;
-		}
-		Ok(count)
-	}
-
 	fn retrieve_gist(gist_id: &GistId)
 		-> Result<(GistFilename, GithubUsername), &'static str>
 	{
@@ -168,12 +167,9 @@ impl<T: Trait> Module<T> {
 		let body_str = sp_std::str::from_utf8(&body).map_err(|_| "Body not UTF8")?;
 		let val = lite_json::parse_json(body_str).map_err(|_| "Unable to parse JSON")?;
 
-		let mut files = get_object(&val, "files")?;
-		if files.is_empty() {
-			return Err("Malformed JSON")
-		}
-		let filename = files.swap_remove(0).0;
-		let filename = filename.into_iter().map(|c| c as u8).collect();
+		let files = get_object(&val, "files")?;
+		let filename = &files.get(0).as_ref().ok_or_else(|| "malformed JSON")?.0;
+		let filename = filename.iter().map(|c| *c as u8).collect();
 		let username = get_string(get_object(&val, "owner")?, "login")?;
 
 		Ok((filename, username))
@@ -201,15 +197,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-#[allow(deprecated)] // ValidateUnsigned
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
-
-	/// Validate unsigned call to this module.
-	///
-	/// By default unsigned transactions are disallowed, but implementing the validator
-	/// here we make sure that some particular calls (the ones produced by offchain worker)
-	/// are being whitelisted and marked as valid.
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		// Firstly let's check that we call the right function.
 		if let Call::respond_verification(account_id, _username) = call {
@@ -231,19 +220,30 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 }
 
 type JsonObject = Vec<(Vec<char>, JsonValue)>;
-fn get_object(val: &JsonValue, key: &str) -> Result<JsonObject, &'static str> {
-	unimplemented!()
+fn get_object<'a>(val: &'a JsonValue, key: &str) -> Result<&'a JsonObject, &'static str> {
+	if let JsonValue::Object(ref obj) = *val {
+		if let JsonValue::Object(ref v) = *find_key(obj, key)? {
+			return Ok(v)
+		}
+	}
+	Err("Non-object on path.")
 }
 
-fn get_string(val: JsonObject, key: &str) -> Result<Vec<u8>, &'static str> {
+fn get_string(val: &JsonObject, key: &str) -> Result<Vec<u8>, &'static str> {
+	if let JsonValue::String(ref chars) = find_key(val, key)? {
+		Ok(chars.iter().map(|c| *c as u8).collect())
+	} else {
+		Err("String key not found in the object.")
+	}
+}
+
+fn find_key<'a>(val: &'a JsonObject, key: &str) -> Result<&'a JsonValue, &'static str> {
 	let chars = key.chars().collect::<Vec<_>>();
 	for (ok, ov) in val {
-		if ok == chars {
-			if let JsonValue::String(chars) = ov {
-				return Ok(chars.into_iter().map(|c| c as u8).collect())
-			}
+		if ok == &chars {
+			return Ok(ov)
 		}
 	}
 
-	Err("String key not found in the object.")
+	Err("Key not found in the object")
 }
