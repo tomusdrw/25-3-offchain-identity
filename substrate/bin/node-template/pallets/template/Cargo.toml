@@ -11,6 +11,7 @@ description = "FRAME pallet template"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 safe-mix = { default-features = false, version = '1.0.0' }
+lite-json = { version = "0.1", default-features = false }
 
 [dependencies.frame-support]
 default-features = false
@@ -22,6 +23,19 @@ default-features = false
 package = 'frame-system'
 version = "2.0.0-alpha.5"
 path = "../../../../frame/system"
+
+[dependencies.sp-runtime]
+default-features = false
+package = 'sp-runtime'
+version = "2.0.0-alpha.5"
+path = "../../../../primitives/runtime"
+
+[dependencies.sp-std]
+default-features = false
+package = 'sp-std'
+version = "2.0.0-alpha.5"
+path = "../../../../primitives/std"
+
 [dev-dependencies.sp-core]
 default-features = false
 version = "2.0.0-alpha.5"

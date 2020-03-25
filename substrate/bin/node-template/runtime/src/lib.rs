@@ -24,6 +24,7 @@ use grandpa::fg_primitives;
 use sp_version::RuntimeVersion;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
+use system::offchain::TransactionSubmitter;
 
 // A few exports that help ease life for downstream crates.
 #[cfg(any(feature = "std", test))]
@@ -223,6 +224,13 @@ impl sudo::Trait for Runtime {
 
 /// Used for the module template in `./template.rs`
 impl template::Trait for Runtime {
+	type Call = Call;
+
+	type SubmitUnsignedTransaction = TransactionSubmitter<
+		(),
+		Runtime,
+		UncheckedExtrinsic
+	>;
 }
 
 construct_runtime!(

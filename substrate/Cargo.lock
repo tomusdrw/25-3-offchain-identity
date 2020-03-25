@@ -3598,6 +3598,7 @@ dependencies = [
  "pallet-utility",
  "pallet-vesting",
  "parity-scale-codec",
+ "rustc-hex",
  "serde",
  "sp-api",
  "sp-authority-discovery",
@@ -4062,7 +4063,6 @@ dependencies = [
 name = "pallet-collective"
 version = "2.0.0-alpha.5"
 dependencies = [
- "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex-literal",
@@ -4536,11 +4536,13 @@ version = "2.0.0-alpha.5"
 dependencies = [
  "frame-support",
  "frame-system",
+ "lite-json",
  "parity-scale-codec",
  "safe-mix",
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -6291,7 +6293,6 @@ dependencies = [
  "futures 0.3.4",
  "futures-timer 3.0.2",
  "futures_codec",
- "hex",
  "libp2p",
  "linked-hash-map",
  "linked_hash_set",
@@ -6305,6 +6306,7 @@ dependencies = [
  "prost-build",
  "quickcheck",
  "rand 0.7.3",
+ "rustc-hex",
  "sc-block-builder",
  "sc-client",
  "sc-client-api",
@@ -6430,6 +6432,7 @@ dependencies = [
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
+ "rustc-hex",
  "sc-block-builder",
  "sc-client",
  "sc-client-api",
@@ -6651,12 +6654,10 @@ dependencies = [
 name = "sc-transaction-pool"
 version = "2.0.0-alpha.5"
 dependencies = [
- "assert_matches",
  "derive_more",
  "futures 0.3.4",
  "futures-diagnose",
  "futures-timer 2.0.2",
- "hex",
  "log 0.4.8",
  "parity-scale-codec",
  "parity-util-mem",
@@ -7250,6 +7251,7 @@ dependencies = [
  "primitive-types",
  "rand 0.7.3",
  "regex",
+ "rustc-hex",
  "schnorrkel",
  "serde",
  "serde_json",
@@ -7746,6 +7748,7 @@ dependencies = [
  "parity-scale-codec",
  "rand 0.7.3",
  "rpassword",
+ "rustc-hex",
  "sc-rpc",
  "serde_json",
  "sp-core",

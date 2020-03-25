@@ -9,10 +9,15 @@
 /// For more guidance on Substrate FRAME, see the example pallet
 /// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
-use frame_support::{decl_module, decl_storage, decl_error, dispatch, debug};
-use frame_support::weights::SimpleDispatchInfo;
-use system::ensure_signed;
 use codec::{Encode, Decode};
+use frame_support::weights::SimpleDispatchInfo;
+use frame_support::{decl_module, decl_storage, decl_error, dispatch, debug};
+use lite_json::json::JsonValue;
+use sp_runtime::offchain::http;
+use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction, TransactionValidity};
+use sp_std::prelude::*;
+use system::offchain::SubmitUnsignedTransaction;
+use system::{ensure_signed, ensure_none};
 
 #[cfg(test)]
 mod mock;
@@ -22,6 +27,12 @@ mod tests;
 
 /// The pallet's configuration trait.
 pub trait Trait: system::Trait {
+	/// The overarching dispatch call type.
+	type Call: From<Call<Self>>;
+
+	/// The type to submit unsigned transactions.
+	type SubmitUnsignedTransaction:
+		SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 }
 
 type GistId = [u8; 32];
@@ -87,7 +98,11 @@ decl_module! {
 
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		pub fn respond_verification(origin, account_id: T::AccountId, username: GithubUsername)
-			-> dispatch::DispatchResult {
+			-> dispatch::DispatchResult
+		{
+			// We are sending unsigned transaction.
+			ensure_none(origin)?;
+
 			if !Requests::<T>::contains_key(&account_id) {
 				Err("No request for this account.")?
 			}
@@ -121,7 +136,7 @@ impl<T: Trait> Module<T> {
 	fn process_requests() -> Result<usize, &'static str> {
 		let mut count = 0;
 		for Request { account, gist_id } in Requests::<T>::iter_values() {
-			let (filename, username) = Self::retrieve_gist_filename(&gist_id)?;
+			let (filename, username) = Self::retrieve_gist(&gist_id)?;
 			debug::info!(
 				"[{:?}] Retrieved:\nFilename: {:?}\nUsername: {:?}",
 				gist_id, filename, username
@@ -133,21 +148,102 @@ impl<T: Trait> Module<T> {
 		Ok(count)
 	}
 
-	fn retrieve_gist_filename(gist_id: &GistId)
+	fn retrieve_gist(gist_id: &GistId)
 		-> Result<(GistFilename, GithubUsername), &'static str>
 	{
-		unimplemented!()
+		let mut address = b"https://api.github.com/gists/".to_vec();
+		address.extend(gist_id.as_ref());
+
+		let address = sp_std::str::from_utf8(&address).unwrap();
+
+		debug::info!("Requesting {}", address);
+		let request = http::Request::get(address);
+		let pending = request.send().map_err(|_| "Unable to send HTTP request")?;
+		let response = pending.wait().map_err(|_| "HTTP failed")?;
+		if response.code != 200 {
+			Err("Unexpected response code. Perhaps the Gist does not exist.")?;
+		}
+
+		let body = response.body().collect::<Vec<u8>>();
+		let body_str = sp_std::str::from_utf8(&body).map_err(|_| "Body not UTF8")?;
+		let val = lite_json::parse_json(body_str).map_err(|_| "Unable to parse JSON")?;
+
+		let mut files = get_object(&val, "files")?;
+		if files.is_empty() {
+			return Err("Malformed JSON")
+		}
+		let filename = files.swap_remove(0).0;
+		let filename = filename.into_iter().map(|c| c as u8).collect();
+		let username = get_string(get_object(&val, "owner")?, "login")?;
+
+		Ok((filename, username))
 	}
 
 	fn check_if_valid(account_id: &T::AccountId, filename: &GistFilename)
 		-> Result<(), &'static str>
 	{
-		unimplemented!()
+		let acc = account_id.encode();
+		if &acc == filename {
+			Ok(())
+		} else {
+			debug::warn!("Expected: {:?}, got: {:?}", acc, filename);
+			Err("Invalid filename.")
+		}
 	}
 
 	fn send_response(account_id: T::AccountId, username: GithubUsername)
 		-> Result<(), &'static str>
 	{
-		unimplemented!()
+
+		let call = Call::respond_verification(account_id, username);
+		T::SubmitUnsignedTransaction::submit_unsigned(call)
+			.map_err(|_| "Unable to send transaction")
 	}
+}
+
+#[allow(deprecated)] // ValidateUnsigned
+impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
+	type Call = Call<T>;
+
+	/// Validate unsigned call to this module.
+	///
+	/// By default unsigned transactions are disallowed, but implementing the validator
+	/// here we make sure that some particular calls (the ones produced by offchain worker)
+	/// are being whitelisted and marked as valid.
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+		// Firstly let's check that we call the right function.
+		if let Call::respond_verification(account_id, _username) = call {
+			if !Requests::<T>::contains_key(&account_id) {
+				return InvalidTransaction::Stale.into()
+			}
+
+			Ok(ValidTransaction {
+				priority: (1 << 20),
+				requires: vec![],
+				provides: vec![codec::Encode::encode(&("github::identity", account_id))],
+				longevity: 5,
+				propagate: true,
+			})
+		} else {
+			InvalidTransaction::Call.into()
+		}
+	}
+}
+
+type JsonObject = Vec<(Vec<char>, JsonValue)>;
+fn get_object(val: &JsonValue, key: &str) -> Result<JsonObject, &'static str> {
+	unimplemented!()
+}
+
+fn get_string(val: JsonObject, key: &str) -> Result<Vec<u8>, &'static str> {
+	let chars = key.chars().collect::<Vec<_>>();
+	for (ok, ov) in val {
+		if ok == chars {
+			if let JsonValue::String(chars) = ov {
+				return Ok(chars.into_iter().map(|c| c as u8).collect())
+			}
+		}
+	}
+
+	Err("String key not found in the object.")
 }
